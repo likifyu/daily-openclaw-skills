@@ -150,6 +150,16 @@ async function sendFeishuMessage(token) {
  */
 async function main() {
   try {
+    // 调试：检查环境变量
+    console.log('检查环境变量...');
+    console.log('FEISHU_APP_ID:', FEISHU_APP_ID ? '已设置' : '未设置');
+    console.log('FEISHU_APP_SECRET:', FEISHU_APP_SECRET ? '已设置' : '未设置');
+    console.log('FEISHU_CHAT_ID:', FEISHU_CHAT_ID ? '已设置' : '未设置');
+
+    if (!FEISHU_APP_ID || !FEISHU_APP_SECRET || !FEISHU_CHAT_ID) {
+      throw new Error('缺少必要的环境变量配置');
+    }
+
     console.log('开始获取飞书访问令牌...');
     const token = await getFeishuToken();
     console.log('获取令牌成功');
