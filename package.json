@@ -1,0 +1,13 @@
+{
+  "name": "daily-openclaw-skills",
+  "version": "1.0.0",
+  "description": "每日自动推送OpenClaw高评分技能项目到飞书",
+  "main": "scripts/send-openclaw-skills.js",
+  "scripts": {
+    "send": "node scripts/send-openclaw-skills.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "license": "MIT"
+}
