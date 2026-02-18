@@ -1,0 +1,37 @@
+name: Daily OpenClaw Skills to Feishu
+
+on:
+  schedule:
+    # 北京时间 10:00 = UTC 02:00 (UTC+8)
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 支持手动触发
+
+env:
+  FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+  FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+  FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+
+jobs:
+  send-skills:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install axios
+
+      - name: Fetch OpenClaw Skills and Send to Feishu
+        run: |
+          node scripts/send-openclaw-skills.js
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
