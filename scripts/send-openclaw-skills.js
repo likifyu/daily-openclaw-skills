@@ -1,6 +1,6 @@
 /**
- * 每日OpenClaw高评分技能推送脚本
- * 获取OpenClaw相关的高评分技能项目并发送到飞书群
+ * 动态获取AI热门项目并推送到飞书
+ * 每日实时抓取 GitHub AI 热榜
  */
 
 const axios = require('axios');
@@ -9,50 +9,88 @@ const axios = require('axios');
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID;
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET;
 const FEISHU_CHAT_ID = process.env.FEISHU_CHAT_ID;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
-// OpenClaw相关的高评分技能项目列表
-const SKILLS_DATA = [
-  {
-    name: 'Claude Code Plugins',
-    repo: 'anthropics/claude-code/plugins',
-    description: '官方插件系统，扩展Claude Code功能',
-    features: ['agent-sdk-dev', 'code-review', 'commit-commands', 'feature-dev', 'plugin-dev', 'security-guidance'],
-    stars: 50000,
-    url: 'https://github.com/anthropics/claude-code/tree/main/plugins'
-  },
-  {
-    name: 'OpenClaw',
-    repo: 'openclaw/openclaw',
-    description: '支持多平台的个人AI助手框架',
-    features: ['WhatsApp', 'Telegram', 'Slack', 'Discord', 'Signal', 'iMessage', 'Teams', 'Matrix'],
-    stars: 25000,
-    url: 'https://github.com/openclaw/openclaw'
-  },
-  {
-    name: 'Superpowers Skills Framework',
-    repo: 'obra/superpowers/skills',
-    description: 'Agentic技能框架，提供丰富的AI技能扩展',
-    features: ['自定义命令', '代理模式', '工作流自动化'],
-    stars: 15000,
-    url: 'https://github.com/obra/superpowers/tree/main/skills'
-  },
-  {
-    name: 'Claude Skills Collection',
-    repo: 'anthropics/claude-skills',
-    description: 'Claude官方技能集合',
-    features: ['MCP集成', '多模态处理', '代码生成'],
-    stars: 12000,
-    url: 'https://github.com/anthropics/claude-skills'
-  },
-  {
-    name: 'AI Assistant Toolkit',
-    repo: 'openclaw/toolkit',
-    description: 'OpenClaw工具包和技能开发工具',
-    features: ['技能模板', '调试工具', '测试框架'],
-    stars: 8000,
-    url: 'https://github.com/openclaw/toolkit'
-  }
+// AI相关关键词（用于筛选项目）
+const AI_KEYWORDS = [
+  'ai', 'artificial-intelligence', 'machine-learning', 'deep-learning',
+  'llm', 'gpt', 'chatgpt', 'claude', 'openai', 'anthropic',
+  'langchain', 'llamaindex', 'transformer', 'neural-network',
+  'computer-vision', 'nlp', 'natural-language', 'speech',
+  'agent', 'rag', 'embedding', 'vector', 'mcp', 'model-context-protocol',
+  'cursor', 'copilot', 'code-assistant', 'ai-code'
 ];
+
+/**
+ * 获取GitHub今日热门项目
+ */
+async function fetchTrendingRepos() {
+  // 查询过去7天stars增长最多的AI相关项目
+  const date = new Date();
+  date.setDate(date.getDate() - 7);
+  const dateStr = date.toISOString().split('T')[0];
+
+  const queries = [
+    // AI/LLM 相关
+    `ai stars:>500 created:>${dateStr}`,
+    `llm stars:>300 pushed:>${dateStr}`,
+    `gpt stars:>300 pushed:>${dateStr}`,
+    `chatbot stars:>300 pushed:>${dateStr}`,
+    `machine-learning stars:>500 pushed:>${dateStr}`,
+    // AI工具
+    `copilot stars:>200 pushed:>${dateStr}`,
+    `code-assistant stars:>200 pushed:>${dateStr}`,
+    // MCP相关
+    `mcp model-context-protocol stars:>100 pushed:>${dateStr}`,
+    // Agent相关
+    `agent ai stars:>300 pushed:>${dateStr}`
+  ];
+
+  const allRepos = [];
+
+  for (const query of queries) {
+    try {
+      const response = await axios.get(
+        'https://api.github.com/search/repositories',
+        {
+          params: {
+            q: query,
+            sort: 'stars',
+            order: 'desc',
+            per_page: 10
+          },
+          headers: GITHUB_TOKEN ? {
+            'Authorization': `token ${GITHUB_TOKEN}`,
+            'Accept': 'application/vnd.github.v3+json'
+          } : {
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        }
+      );
+
+      if (response.data.items) {
+        allRepos.push(...response.data.items);
+      }
+    } catch (error) {
+      console.log(`查询失败 (${query}): ${error.message}`);
+    }
+  }
+
+  // 去重并排序
+  const uniqueRepos = new Map();
+  allRepos.forEach(repo => {
+    if (!uniqueRepos.has(repo.full_name)) {
+      uniqueRepos.set(repo.full_name, repo);
+    }
+  });
+
+  // 按stars排序，取前10个
+  const sortedRepos = Array.from(uniqueRepos.values())
+    .sort((a, b) => b.stargazers_count - a.stargazers_count)
+    .slice(0, 10);
+
+  return sortedRepos;
+}
 
 /**
  * 获取飞书访问令牌
@@ -76,7 +114,7 @@ async function getFeishuToken() {
 /**
  * 发送富文本消息到飞书
  */
-async function sendFeishuMessage(token) {
+async function sendFeishuMessage(token, repos) {
   const today = new Date().toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -86,39 +124,40 @@ async function sendFeishuMessage(token) {
   // 构建富文本内容
   const content = {
     zh_cn: {
-      title: '🤖 OpenClaw 高评分技能项目推荐',
+      title: '🤖 AI 每日热榜',
       content: [
         [
           { tag: 'text', text: '📊 ' },
           { tag: 'text', text: `每日精选 - ${today}` }
         ],
         [{ tag: 'text', text: '' }],
-        [{ tag: 'text', text: '🔥 热门技能项目推荐：' }],
+        [{ tag: 'text', text: '🔥 GitHub AI 热门项目（实时）：' }],
         [{ tag: 'text', text: '' }]
       ]
     }
   };
 
-  // 添加每个技能项目
-  SKILLS_DATA.forEach((skill, index) => {
+  // 添加每个项目
+  repos.forEach((repo, index) => {
+    const lang = repo.language || 'Unknown';
+    const stars = repo.stargazers_count >= 1000
+      ? `${(repo.stargazers_count / 1000).toFixed(1)}k`
+      : repo.stargazers_count.toString();
+
     content.zh_cn.content.push(
-      [{ tag: 'text', text: `${index + 1}. ${skill.name}` }],
-      [{ tag: 'text', text: `   📦 ${skill.repo}` }],
-      [{ tag: 'text', text: `   ⭐ ${skill.stars.toLocaleString()} stars` }],
-      [{ tag: 'text', text: `   📝 ${skill.description}` }],
-      [{ tag: 'text', text: `   🔗 ${skill.url}` }],
+      [{ tag: 'text', text: `${index + 1}. ${repo.name}` }],
+      [{ tag: 'text', text: `   📦 ${repo.full_name}` }],
+      [{ tag: 'text', text: `   ⭐ ${stars} stars  |  💻 ${lang}` }],
+      [{ tag: 'text', text: `   📝 ${repo.description || '暂无描述'}` }],
+      [{ tag: 'text', text: `   🔗 ${repo.html_url}` }],
       [{ tag: 'text', text: '' }]
     );
   });
 
-  // 添加技能亮点
+  // 添加底部信息
   content.zh_cn.content.push(
-    [{ tag: 'text', text: '💡 技能亮点：' }],
-    [{ tag: 'text', text: '• 自定义命令和代理' }],
-    [{ tag: 'text', text: '• 工作流自动化' }],
-    [{ tag: 'text', text: '• 多渠道消息支持' }],
-    [{ tag: 'text', text: '• ClawHub技能发现平台' }],
-    [{ tag: 'text', text: '' }],
+    [{ tag: 'text', text: '─────────────' }],
+    [{ tag: 'text', text: '💡 数据来源：GitHub API（实时）' }],
     [{ tag: 'text', text: '📅 由 GitHub Actions 自动推送' }]
   );
 
@@ -150,26 +189,50 @@ async function sendFeishuMessage(token) {
  */
 async function main() {
   try {
-    // 调试：检查环境变量
+    console.log('🤖 AI 每日热榜推送开始...');
+    console.log('');
+
+    // 检查环境变量
     console.log('检查环境变量...');
-    console.log('FEISHU_APP_ID:', FEISHU_APP_ID ? '已设置' : '未设置');
-    console.log('FEISHU_APP_SECRET:', FEISHU_APP_SECRET ? '已设置' : '未设置');
-    console.log('FEISHU_CHAT_ID:', FEISHU_CHAT_ID ? '已设置' : '未设置');
+    console.log('FEISHU_APP_ID:', FEISHU_APP_ID ? '✅ 已设置' : '❌ 未设置');
+    console.log('FEISHU_APP_SECRET:', FEISHU_APP_SECRET ? '✅ 已设置' : '❌ 未设置');
+    console.log('FEISHU_CHAT_ID:', FEISHU_CHAT_ID ? '✅ 已设置' : '❌ 未设置');
+    console.log('GITHUB_TOKEN:', GITHUB_TOKEN ? '✅ 已设置' : '⚠️ 未设置（将使用匿名访问，有速率限制）');
+    console.log('');
 
     if (!FEISHU_APP_ID || !FEISHU_APP_SECRET || !FEISHU_CHAT_ID) {
-      throw new Error('缺少必要的环境变量配置');
+      throw new Error('缺少必要的飞书环境变量配置');
     }
 
-    console.log('开始获取飞书访问令牌...');
-    const token = await getFeishuToken();
-    console.log('获取令牌成功');
+    // 获取热门项目
+    console.log('📡 正在获取 GitHub AI 热门项目...');
+    const repos = await fetchTrendingRepos();
+    console.log(`✅ 获取到 ${repos.length} 个热门项目`);
+    console.log('');
 
-    console.log('发送OpenClaw技能消息到飞书...');
-    const result = await sendFeishuMessage(token);
-    console.log('消息发送成功:', result.data?.message_id);
+    if (repos.length === 0) {
+      throw new Error('未获取到任何项目');
+    }
+
+    // 显示获取到的项目
+    console.log('📋 热门项目列表：');
+    repos.forEach((repo, index) => {
+      console.log(`   ${index + 1}. ${repo.full_name} (⭐${repo.stargazers_count})`);
+    });
+    console.log('');
+
+    // 获取飞书token并发送消息
+    console.log('🔑 获取飞书访问令牌...');
+    const token = await getFeishuToken();
+    console.log('✅ 获取令牌成功');
+
+    console.log('📤 发送消息到飞书...');
+    const result = await sendFeishuMessage(token, repos);
+    console.log('✅ 消息发送成功!');
+    console.log('   消息ID:', result.data?.message_id);
 
   } catch (error) {
-    console.error('执行失败:', error.message);
+    console.error('❌ 执行失败:', error.message);
     process.exit(1);
   }
 }

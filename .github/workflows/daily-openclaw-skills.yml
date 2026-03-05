@@ -1,4 +1,4 @@
-name: Daily OpenClaw Skills to Feishu
+name: AI Daily Hot News to Feishu
 
 on:
   schedule:
@@ -10,6 +10,7 @@ env:
   FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
   FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
   FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   send-skills:
@@ -27,10 +28,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Fetch OpenClaw Skills and Send to Feishu
+      - name: Fetch AI Hot Projects and Send to Feishu
         run: |
           node scripts/send-openclaw-skills.js
         env:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
