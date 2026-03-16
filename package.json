@@ -1,13 +1,11 @@
 {
-  "name": "daily-openclaw-skills",
+  "name": "ai-hot-news-feishu",
   "version": "1.0.0",
-  "description": "每日自动推送OpenClaw高评分技能项目到飞书",
-  "main": "scripts/send-openclaw-skills.js",
+  "description": "AI每日热榜推送到飞书",
   "scripts": {
     "send": "node scripts/send-openclaw-skills.js"
   },
   "dependencies": {
     "axios": "^1.6.0"
-  },
-  "license": "MIT"
+  }
 }
