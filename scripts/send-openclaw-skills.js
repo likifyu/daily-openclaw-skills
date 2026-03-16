@@ -5,10 +5,10 @@
 
 const axios = require('axios');
 
-// 配置
-const FEISHU_APP_ID = process.env.FEISHU_APP_ID;
-const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET;
-const FEISHU_CHAT_ID = process.env.FEISHU_CHAT_ID;
+// 配置 - 优致科技应用
+const FEISHU_APP_ID = process.env.FEISHU_APP_ID || 'cli_a9c0467200f8dcd0';
+const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || 'UNZtnQQAtgT3qxdoDMcVwhz44e3W7qXS';
+const FEISHU_CHAT_ID = process.env.FEISHU_CHAT_ID || 'oc_5bb33921f628c074107ce5afe5a30132';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 // AI相关关键词（用于筛选项目）
@@ -25,25 +25,15 @@ const AI_KEYWORDS = [
  * 获取GitHub今日热门项目
  */
 async function fetchTrendingRepos() {
-  // 查询过去7天stars增长最多的AI相关项目
-  const date = new Date();
-  date.setDate(date.getDate() - 7);
-  const dateStr = date.toISOString().split('T')[0];
-
+  // 使用简单的查询，避免API速率限制
   const queries = [
-    // AI/LLM 相关
-    `ai stars:>500 created:>${dateStr}`,
-    `llm stars:>300 pushed:>${dateStr}`,
-    `gpt stars:>300 pushed:>${dateStr}`,
-    `chatbot stars:>300 pushed:>${dateStr}`,
-    `machine-learning stars:>500 pushed:>${dateStr}`,
-    // AI工具
-    `copilot stars:>200 pushed:>${dateStr}`,
-    `code-assistant stars:>200 pushed:>${dateStr}`,
-    // MCP相关
-    `mcp model-context-protocol stars:>100 pushed:>${dateStr}`,
-    // Agent相关
-    `agent ai stars:>300 pushed:>${dateStr}`
+    // AI热门项目（按stars排序）
+    'ai language:python stars:>10000',
+    'llm stars:>5000',
+    'chatbot stars:>5000',
+    'machine-learning stars:>10000',
+    'openai stars:>3000',
+    'langchain stars:>5000'
   ];
 
   const allRepos = [];
@@ -161,24 +151,38 @@ async function sendFeishuMessage(token, repos) {
     [{ tag: 'text', text: '📅 由 GitHub Actions 自动推送' }]
   );
 
-  const response = await axios.post(
-    'https://open.feishu.cn/open-apis/im/v1/messages',
-    {
-      receive_id: FEISHU_CHAT_ID,
-      msg_type: 'post',
-      content: JSON.stringify(content)
-    },
-    {
-      params: { receive_id_type: 'chat_id' },
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+  let response;
+  try {
+    response = await axios.post(
+      'https://open.feishu.cn/open-apis/im/v1/messages',
+      {
+        receive_id: FEISHU_CHAT_ID,
+        msg_type: 'post',
+        content: JSON.stringify(content)
+      },
+      {
+        params: { receive_id_type: 'chat_id' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       }
+    );
+  } catch (error) {
+    console.log('❌ 请求失败详情:');
+    if (error.response) {
+      console.log('状态码:', error.response.status);
+      console.log('响应数据:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.log('错误信息:', error.message);
     }
-  );
+    throw error;
+  }
+
+  console.log('📤 发送消息响应:', JSON.stringify(response.data, null, 2));
 
   if (response.data.code !== 0) {
-    throw new Error(`发送消息失败: ${response.data.msg}`);
+    throw new Error(`发送消息失败: code=${response.data.code}, msg=${response.data.msg}`);
   }
 
   return response.data;
